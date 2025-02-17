@@ -1,4 +1,4 @@
-/* Basic reset to remove default margin/padding and set full height */
+
 html, body {
     margin: 0;
     padding: 0;
@@ -8,7 +8,7 @@ html, body {
     font-family: sans-serif;
 }
 
-/* If no touch support, this overlay covers the page */
+
 #noTouchOverlay {
     position: fixed;
     top: 0;
@@ -16,13 +16,15 @@ html, body {
     width: 100%;
     height: 100%;
     background: #fff;
-    display: none; /* Will show if no touch support is detected */
-    z-index: 9999; /* On top of everything */
+    display: none; 
+    z-index: 9999; 
     align-items: center;
     justify-content: center;
 }
+
+
 #noTouchMessage {
-    font-size: 24px;
+    font-size: 30px; 
     color: #333;
     text-align: center;
     padding: 20px;
@@ -30,7 +32,7 @@ html, body {
     border-radius: 8px;
 }
 
-/* Canvas container uses remaining space above controls */
+
 #canvasContainer {
     position: relative;
     width: 100%;
@@ -41,21 +43,22 @@ html, body {
     display: block;
     width: 100%;
     height: 100%;
-    touch-action: none; /* Allows multiple fingers on some devices */
+    touch-action: none; 
 }
 
-/* Hint in the middle of the canvas */
+
+
 #hint {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     color: #aaa;
-    font-size: 24px;
+    font-size: 36px; 
     pointer-events: none;
 }
 
-/* Bottom controls bar */
+
 #controls {
     position: relative;
     width: 100%;
@@ -69,29 +72,31 @@ html, body {
 #controls > div {
     margin: 0 15px;
 }
+
 #controls label {
     margin: 0 8px;
-    font-size: 14px;
+    font-size: 20px; 
 }
 #countInput {
     width: 60px;
+    font-size: 18px; 
 }
 
-/* Overlay for showing the final colorful result */
+
 #resultOverlay {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
     color: #000;
-    font-size: 22px;
+    font-size: 30px; 
     font-weight: bold;
     text-align: center;
     padding: 20px;
     background: rgba(255, 255, 255, 0.8);
     border-radius: 8px;
-    pointer-events: none;   /* So it doesn't block clicks/touches */
-    z-index: 999;          /* Above canvas, below noTouchOverlay if shown */
+    pointer-events: none;   
+    z-index: 999;          
     display: none;
     width: 80%;
     max-width: 600px;
