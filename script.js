@@ -92,7 +92,7 @@ function handleTouchStart(ev) {
                 color: COLORS[id % COLORS.length],
                 angle: 0,
                 // Make aims bigger by increasing starting radius
-                radius: 50,
+                radius: 200,
                 active: true
             };
         }
@@ -111,7 +111,6 @@ function handleTouchMove(ev) {
             touchesData[id].y = t.clientY;
         }
     }
-    updateLastTouchTime();
 }
 
 function handleTouchEnd(ev) {
