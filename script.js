@@ -57,6 +57,16 @@ let locked = false;
 // Timer handle for auto-reset (10s after showing result)
 let resultTimer = null;
 
+/**
+ * An array of teams (only used in Team mode):
+ *  teams = [
+ *    [ { id: 'someTouchId', color: '#0082c8' }, ... ],
+ *    [ ... ]
+ *  ];
+ * We'll fill this in lockAndShowResult() for "team" mode.
+ */
+let teams = [];
+
 /********************************************
  * Initialization
  ********************************************/
@@ -106,7 +116,7 @@ function handleTouchStart(ev) {
                 y: t.clientY,
                 color: COLORS[id % COLORS.length],
                 angle: 0,
-                // Double the initial radius
+                // Larger initial radius (from previous request)
                 radius: 100,
                 active: true
             };
@@ -160,30 +170,32 @@ function drawLoop() {
 
     const mode = getCurrentMode();
 
-    // Always animate the aims of active touches (even if locked),
-    // so the chosen aim or team members keep rotating/pulsing.
+    // Always animate the aims of active touches, so winner or team members keep rotating/pulsing
     for (let id in touchesData) {
         const data = touchesData[id];
-        if (!data.active) continue; // skip if not active
+        if (!data.active) continue;
 
         // Update rotation & pulsation
         data.angle += 0.05;
-        // 2× bigger than before => 80 to 120 range, for instance
+        // 2× bigger => 80–120 range
         data.radius = 80 + 40 * Math.abs(Math.sin(data.angle));
 
         // Draw aim
         drawAim(data);
     }
 
-    // If we're in team mode and showing result, also draw lines
+    // If we're in team mode and showing result, connect only teammates
     if (showingResult && mode === 'team') {
         drawTeamLines();
     }
 
     // Check inactivity => lock and show result
-    if (!locked && !showingResult &&
+    if (
+        !locked &&
+        !showingResult &&
         (Date.now() - lastTouchTime > INACTIVITY_TIMEOUT) &&
-        Object.keys(touchesData).length > 0) {
+        Object.keys(touchesData).length > 0
+    ) {
         lockAndShowResult();
     }
 
@@ -202,7 +214,7 @@ function drawAim(touchInfo) {
 
     // Outer circle
     ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, 2*Math.PI);
+    ctx.arc(0, 0, radius, 0, 2 * Math.PI);
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.stroke();
@@ -223,7 +235,7 @@ function drawAim(touchInfo) {
 /**
  * Lock canvas => no more position updates. Then show result.
  * - For "choose" mode, pick 1 random active.
- * - For "team" mode, we show lines and text.
+ * - For "team" mode, partition and store in "teams".
  */
 function lockAndShowResult() {
     locked = true;
@@ -248,15 +260,14 @@ function lockAndShowResult() {
         resultOverlay.innerHTML =
             `Winner: <span style="color:${chosenColor}">${chosenColorName}</span>`;
         resultOverlay.style.display = 'block';
-    }
-    else if (mode === 'team') {
+    } else if (mode === 'team') {
         // Partition touches into N teams
         let teamCount = parseInt(countInput.value, 10);
         if (teamCount < 1) teamCount = 1;
         if (teamCount > activeKeys.length) teamCount = activeKeys.length;
 
-        // Get array of {id, color}
-        let touchArray = activeKeys.map(id => ({ id, color: touchesData[id].color }));
+        // Prepare array of { id, color }
+        let touchArray = activeKeys.map((id) => ({ id, color: touchesData[id].color }));
 
         // Shuffle the array
         for (let i = touchArray.length - 1; i > 0; i--) {
@@ -264,8 +275,8 @@ function lockAndShowResult() {
             [touchArray[i], touchArray[j]] = [touchArray[j], touchArray[i]];
         }
 
-        // Create empty teams
-        let teams = [];
+        // Create empty teams array
+        teams = [];
         for (let i = 0; i < teamCount; i++) {
             teams.push([]);
         }
@@ -277,10 +288,10 @@ function lockAndShowResult() {
             index = (index + 1) % teamCount;
         }
 
-        // Build multiline text: "Team 1: Color1, Color2..."
+        // Build multiline text for the result overlay
         let resultText = '';
         teams.forEach((team, i) => {
-            let teamLabel = `Team ${i+1}: `;
+            let teamLabel = `Team ${i + 1}: `;
             let colorStrings = team.map(({ color }) => {
                 let name = getColorName(color);
                 return `<span style="color:${color}">${name}</span>`;
@@ -292,7 +303,7 @@ function lockAndShowResult() {
         resultOverlay.style.display = 'block';
     }
 
-    // After 10 seconds, reset automatically so we can play again
+    // After 10 seconds, reset automatically
     if (resultTimer) clearTimeout(resultTimer);
     resultTimer = setTimeout(() => {
         resetAll();
@@ -300,13 +311,22 @@ function lockAndShowResult() {
 }
 
 /**
- * Draw lines between all active touches in "team" mode
+ * Draw lines only among members of the same team
  */
 function drawTeamLines() {
-    const activeTouches = Object.values(touchesData).filter(t => t.active);
-    for (let i = 0; i < activeTouches.length; i++) {
-        for (let j = i + 1; j < activeTouches.length; j++) {
-            drawLineBetween(activeTouches[i], activeTouches[j]);
+    // teams is an array of arrays
+    for (let team of teams) {
+        // team is like: [ { id, color }, ...]
+        // We'll create a local array of the actual "touch data" objects
+        let teamTouches = team
+            .map((member) => touchesData[member.id])
+            .filter((td) => td && td.active);
+
+        // Double loop to draw lines among them
+        for (let i = 0; i < teamTouches.length; i++) {
+            for (let j = i + 1; j < teamTouches.length; j++) {
+                drawLineBetween(teamTouches[i], teamTouches[j]);
+            }
         }
     }
 }
@@ -355,6 +375,9 @@ function resetAll() {
     showingResult = false;
     locked = false;
     lastTouchTime = 0;
+
+    // Clear teams
+    teams = [];
 
     // Hide overlays
     hintDiv.style.display = 'block';
