@@ -17,52 +17,65 @@ const ctx = canvas.getContext('2d');
 const hintDiv = document.getElementById('hint');
 const modeRadios = document.getElementsByName('mode');
 const countInput = document.getElementById('countInput');
+const resultOverlay = document.getElementById('resultOverlay');
 
-// Touches currently on the screen: { [identifier]: { x, y, color, angle, radius, active } }
+// Touches: { [identifier]: { x, y, color, angle, radius, active } }
 let touchesData = {};
 
-// 10 distinct colors for up to 10 fingers
+// Distinct colors for up to 10 fingers
 const COLORS = [
     '#e6194b','#3cb44b','#ffe119','#0082c8','#f58231',
     '#911eb4','#46f0f0','#f032e6','#d2f53c','#fabebe'
 ];
 
-// Track time of last touch event; used to detect 5s of inactivity
+// Map color codes to friendly names (approx)
+const COLOR_NAMES = {
+    '#e6194b': 'Red',
+    '#3cb44b': 'Green',
+    '#ffe119': 'Yellow',
+    '#0082c8': 'Blue',
+    '#f58231': 'Orange',
+    '#911eb4': 'Purple',
+    '#46f0f0': 'Cyan',
+    '#f032e6': 'Magenta',
+    '#d2f53c': 'Lime',
+    '#fabebe': 'Pink'
+};
+
+// Track time of last START/END event
 let lastTouchTime = 0;
 
-// How many milliseconds of inactivity until a “result” is shown
+// Milliseconds of inactivity until we lock and show result
 const INACTIVITY_TIMEOUT = 5000;
 
-// Boolean to indicate if we are currently showing a “result” (highlight or lines)
+// Whether we’re showing a final result (aims freeze or lines are drawn)
 let showingResult = false;
 
-// Once locked, no further touch updates or new touches are processed
+// Once locked, ignore new touches or movement
 let locked = false;
+
+// Timer handle for auto-reset (10s after showing result)
+let resultTimer = null;
 
 /********************************************
  * Initialization
  ********************************************/
 function resizeCanvas() {
-    // Make the canvas match the container size
     const rect = canvas.parentNode.getBoundingClientRect();
     canvas.width = rect.width;
     canvas.height = rect.height;
 }
 
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas(); // on load
+resizeCanvas(); // On load
 
 // Listen for mode changes
 modeRadios.forEach(radio => {
-    radio.addEventListener('change', () => {
-        resetAll();
-    });
+    radio.addEventListener('change', resetAll);
 });
 
 // Listen for number input changes
-countInput.addEventListener('change', () => {
-    resetAll();
-});
+countInput.addEventListener('change', resetAll);
 
 // Touch events (if device supports it)
 canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
@@ -77,13 +90,15 @@ requestAnimationFrame(drawLoop);
  * Event Handlers
  ********************************************/
 function handleTouchStart(ev) {
-    if (locked) return; // ignore if locked
+    if (locked) return;
     ev.preventDefault();
+
+    // Hide the hint once a finger touches
+    hintDiv.style.display = 'none';
     showingResult = false;
-    hintDiv.style.display = 'none'; // Hide the hint once a touch occurs
 
     for (let t of ev.changedTouches) {
-        // Limit to max of 10 touches
+        // Up to 10 touches
         let id = t.identifier;
         if (Object.keys(touchesData).length < 10) {
             touchesData[id] = {
@@ -91,19 +106,20 @@ function handleTouchStart(ev) {
                 y: t.clientY,
                 color: COLORS[id % COLORS.length],
                 angle: 0,
-                // Make aims bigger by increasing starting radius
-                radius: 200,
+                // Larger initial radius
+                radius: 50,
                 active: true
             };
         }
     }
-    updateLastTouchTime();
+    updateLastTouchTime(); // Only update time on start/end
 }
 
 function handleTouchMove(ev) {
-    if (locked) return; // ignore if locked
+    if (locked) return;  // We ignore moves if locked
     ev.preventDefault();
-    showingResult = false;
+
+    // DO NOT update lastTouchTime here (as requested)
     for (let t of ev.changedTouches) {
         let id = t.identifier;
         if (touchesData[id]) {
@@ -114,8 +130,9 @@ function handleTouchMove(ev) {
 }
 
 function handleTouchEnd(ev) {
-    if (locked) return; // ignore if locked
+    if (locked) return;
     ev.preventDefault();
+
     showingResult = false;
     for (let t of ev.changedTouches) {
         let id = t.identifier;
@@ -123,7 +140,7 @@ function handleTouchEnd(ev) {
             delete touchesData[id];
         }
     }
-    updateLastTouchTime();
+    updateLastTouchTime(); // Only update time on start/end
 }
 
 function updateLastTouchTime() {
@@ -131,45 +148,54 @@ function updateLastTouchTime() {
 }
 
 /********************************************
- * Core Logic
+ * Core Logic: Animation + Result
  ********************************************/
 function drawLoop() {
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // If no touches and not showing final, show hint
+    // If no touches and not showing final, show the hint
     if (Object.keys(touchesData).length === 0 && !showingResult) {
         hintDiv.style.display = 'block';
     }
 
-    // Animate each touch's "aim" if we are not locked and not showing final
+    const mode = getCurrentMode();
+
+    // If we are NOT locked and NOT showing final:
+    //   animate the "aims" for all active touches
     if (!locked && !showingResult) {
         for (let id in touchesData) {
             let data = touchesData[id];
             data.angle += 0.05;
-            // Animate radius between 40 - 60 (bigger than before)
+            // Animate radius between 40 - 60
             data.radius = 40 + 20 * Math.abs(Math.sin(data.angle));
             drawAim(data);
         }
     }
+    else if (showingResult) {
+        // We are showing the final result
+        if (mode === 'team') {
+            // Draw lines between active touches
+            drawTeamLines();
+        } else if (mode === 'choose') {
+            // Re-draw only the chosen aim (the one still active)
+            for (let id in touchesData) {
+                if (touchesData[id].active) {
+                    drawAim(touchesData[id]);
+                }
+            }
+        }
+    }
 
-    // Check if we should show the “result” (5s inactivity) if not locked
-    if (!locked && !showingResult && Date.now() - lastTouchTime > INACTIVITY_TIMEOUT && Object.keys(touchesData).length > 0) {
-        showingResult = true;
+    // Check inactivity => lock and show result
+    if (!locked && !showingResult && (Date.now() - lastTouchTime > INACTIVITY_TIMEOUT) && Object.keys(touchesData).length > 0) {
         lockAndShowResult();
     }
 
-    // If we’re in “team” mode and showing result, draw lines
-    if (showingResult && getCurrentMode() === 'team') {
-        drawTeamLines();
-    }
-
-    // Request next frame
     requestAnimationFrame(drawLoop);
 }
 
 /**
- * Draw a rotating “aim” for a single touch
+ * Draw a single "aim"
  */
 function drawAim(touchInfo) {
     const { x, y, color, angle, radius } = touchInfo;
@@ -199,43 +225,95 @@ function drawAim(touchInfo) {
 }
 
 /**
- * Lock the canvas and show the “result” after inactivity
- * - In “choose” mode: highlight only one random touch
- * - In “team” mode: draw lines between them
+ * Lock canvas => no more touches or movement. Then show result.
+ * - For "choose" mode, pick 1 random active.
+ * - For "team" mode, we’ll draw lines in the loop and show text as well.
  */
 function lockAndShowResult() {
-    // Lock so no new touches or updates
     locked = true;
+    showingResult = true;
+
     const mode = getCurrentMode();
+    const activeKeys = Object.keys(touchesData);
+
+    // If there's no touch, do nothing special
+    if (activeKeys.length === 0) return;
 
     if (mode === 'choose') {
-        // Randomly pick one touch to keep active
-        let keys = Object.keys(touchesData);
-        if (keys.length > 0) {
-            let randomKey = keys[Math.floor(Math.random() * keys.length)];
-            // Hide all but the chosen one
-            for (let id in touchesData) {
-                if (id !== randomKey) {
-                    touchesData[id].active = false;
-                }
+        // Pick exactly one winner
+        const chosenKey = activeKeys[Math.floor(Math.random() * activeKeys.length)];
+        for (let id of activeKeys) {
+            if (id !== chosenKey) {
+                touchesData[id].active = false; // hide non-chosen
             }
         }
+        // Show a single-line result: "Winner: <ColorName>"
+        const chosenColor = touchesData[chosenKey].color;
+        const chosenColorName = getColorName(chosenColor);
+        resultOverlay.innerHTML = `Winner: <span style="color:${chosenColor}">${chosenColorName}</span>`;
+        resultOverlay.style.display = 'block';
     }
-    // if (mode === 'team'), we do nothing special here except
-    // continuing to draw lines in drawTeamLines().
+    else if (mode === 'team') {
+        // Partition touches into N teams (number from countInput)
+        let teamCount = parseInt(countInput.value, 10);
+        if (teamCount < 1) teamCount = 1;
+        if (teamCount > activeKeys.length) teamCount = activeKeys.length;
+
+        // Get array of {color} from touches
+        let touchArray = activeKeys.map(id => ({ id, color: touchesData[id].color }));
+
+        // Shuffle the array (simple Durstenfeld shuffle)
+        for (let i = touchArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [touchArray[i], touchArray[j]] = [touchArray[j], touchArray[i]];
+        }
+
+        // Create empty teams
+        let teams = [];
+        for (let i = 0; i < teamCount; i++) {
+            teams.push([]);
+        }
+
+        // Distribute touches into teams in order
+        let index = 0;
+        for (let touchObj of touchArray) {
+            teams[index].push(touchObj);
+            index = (index + 1) % teamCount;
+        }
+
+        // Build a multiline string: "Team 1: colorA, colorB\nTeam 2: colorC..."
+        let resultText = '';
+        teams.forEach((team, i) => {
+            let teamLabel = `Team ${i+1}: `;
+            // Each color name
+            let colorStrings = team.map(({ color }) => {
+                let name = getColorName(color);
+                return `<span style="color:${color}">${name}</span>`;
+            });
+            resultText += teamLabel + colorStrings.join(', ') + '<br>';
+        });
+
+        resultOverlay.innerHTML = resultText;
+        resultOverlay.style.display = 'block';
+    }
+
+    // After 10 seconds, reset automatically so we can play again
+    if (resultTimer) {
+        clearTimeout(resultTimer);
+    }
+    resultTimer = setTimeout(() => {
+        resetAll();
+    }, 10000);
 }
 
 /**
- * Draw lines between all active touches in “team” mode
+ * Draw lines between all active touches in "team" mode
  */
 function drawTeamLines() {
-    let activeTouches = Object.values(touchesData).filter(t => t.active);
-
+    const activeTouches = Object.values(touchesData).filter(t => t.active);
     for (let i = 0; i < activeTouches.length; i++) {
-        for (let j = i+1; j < activeTouches.length; j++) {
-            const t1 = activeTouches[i];
-            const t2 = activeTouches[j];
-            drawLineBetween(t1, t2);
+        for (let j = i + 1; j < activeTouches.length; j++) {
+            drawLineBetween(activeTouches[i], activeTouches[j]);
         }
     }
 }
@@ -259,23 +337,40 @@ function drawLineBetween(t1, t2) {
 }
 
 /**
- * Helper: get current mode from radio buttons
+ * Get color mode from radio
  */
 function getCurrentMode() {
     for (let radio of modeRadios) {
         if (radio.checked) return radio.value;
     }
-    return 'choose';
+    return 'choose'; // default
 }
 
 /**
- * Reset everything (when changing modes / inputs)
+ * Convert color code (e.g. #0082c8) to a simple name ("Blue")
+ */
+function getColorName(colorCode) {
+    return COLOR_NAMES[colorCode] || colorCode;
+}
+
+/**
+ * Reset everything so a new game can start
  */
 function resetAll() {
     // Clear touches
     touchesData = {};
     showingResult = false;
-    lastTouchTime = 0;
     locked = false;
+    lastTouchTime = 0;
+
+    // Hide overlays
     hintDiv.style.display = 'block';
+    resultOverlay.style.display = 'none';
+    resultOverlay.innerHTML = '';
+
+    // Cancel any pending reset timers
+    if (resultTimer) {
+        clearTimeout(resultTimer);
+        resultTimer = null;
+    }
 }

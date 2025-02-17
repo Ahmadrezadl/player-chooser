@@ -8,7 +8,7 @@
 </head>
 <body>
 
-<!-- This overlay will appear if no touch support is detected -->
+<!-- This overlay will appear if no touch support is detected (e.g. PC) -->
 <div id="noTouchOverlay">
     <div id="noTouchMessage">
         Please open this website on a phone or other touch device.
@@ -18,7 +18,7 @@
 <!-- Canvas Container -->
 <div id="canvasContainer">
     <canvas id="myCanvas"></canvas>
-    <!-- Hint in the middle -->
+    <!-- Hint in the middle of the canvas -->
     <div id="hint">Put your fingers to start</div>
 </div>
 
@@ -37,6 +37,9 @@
         <input type="number" id="countInput" value="1" min="1">
     </div>
 </div>
+
+<!-- An overlay for showing the colorful text result -->
+<div id="resultOverlay"></div>
 
 <!-- External JS file -->
 <script src="script.js"></script>

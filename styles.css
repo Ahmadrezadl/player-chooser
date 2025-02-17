@@ -76,3 +76,23 @@ html, body {
 #countInput {
     width: 60px;
 }
+
+/* Overlay for showing the final colorful result */
+#resultOverlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #000;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 8px;
+    pointer-events: none;   /* So it doesn't block clicks/touches */
+    z-index: 999;          /* Above canvas, below noTouchOverlay if shown */
+    display: none;
+    width: 80%;
+    max-width: 600px;
+}
